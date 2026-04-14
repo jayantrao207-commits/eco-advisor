@@ -2,6 +2,7 @@
 import pandas as pd
 import streamlit as st
 import re
+import random
 
 st.set_page_config(page_title="Eco Advisor", layout="wide")
 
@@ -45,7 +46,7 @@ if organic_filter:
 filtered["Score"] = (filtered["EcoScore"] * 0.7) + ((5000 - filtered["Price"]) * 0.3 / 5000)
 result = filtered.sort_values(by="Score", ascending=False)
 
-# Grid UI
+# 🌟 GRID UI
 st.subheader("🌟 Top Recommendations")
 cols = st.columns(3)
 
@@ -64,69 +65,141 @@ st.subheader("📊 Insights")
 st.bar_chart(data["EcoScore"])
 st.bar_chart(data["Category"].value_counts())
 
-# 🤖 CHATBOT (FINAL FIXED)
+# 🤖 SMART CHATBOT
 st.markdown("---")
 st.subheader("🤖 Smart Eco Chatbot")
 
-user_input = st.text_input("Ask (e.g., tshirt, soap, gift)")
+user_input = st.text_input("Ask (e.g., tshirt, gift, living room decor)")
 
 if user_input:
-    query = user_input.lower().replace("-", " ")
-    words = query.split()
+    query = user_input.lower()
 
-    # 🔥 Detect product intent FIRST
-    is_product_query = any(x in query for x in [
-        "tshirt", "t shirt", "shirt", "tee",
-        "soap", "shampoo", "cleaner",
-        "gift", "toothpaste"
-    ])
+    # 🧠 Intent detection
+    intent = None
 
-    # Greeting (only if no product intent)
-    if not is_product_query and any(x in words for x in ["hi", "hello", "hey"]):
-        st.success("👋 Hello! Ask me for eco-friendly products")
+    if any(x in query for x in ["tshirt", "t shirt", "shirt"]):
+        intent = "tshirt"
 
-    elif any(x in words for x in ["thank", "thanks"]):
-        st.success("😊 You're welcome!")
+    elif "clothes" in query or "wear" in query:
+        intent = "clothes"
+
+    elif any(x in query for x in ["soap", "shampoo", "toothpaste"]):
+        intent = "personal"
+
+    elif any(x in query for x in ["cleaner", "detergent"]):
+        intent = "home"
+
+    elif "gift" in query:
+        intent = "gift"
+
+    elif any(x in query for x in ["living room", "decor", "decoration", "aesthetic", "home decor"]):
+        intent = "decor"
+
+    # 💰 price detection
+    price_match = re.findall(r'\d+', query)
+    max_price = int(price_match[0]) if price_match else None
+
+    # 🎯 RESPONSE
+
+    if intent == "tshirt":
+        result_chat = data[
+            (data["Category"] == "Clothes") &
+            (data["Name_clean"].str.contains("shirt"))
+        ]
+
+    elif intent == "clothes":
+        result_chat = data[data["Category"] == "Clothes"]
+
+    elif intent == "personal":
+        result_chat = data[data["Category"] == "Personal Care"]
+
+    elif intent == "home":
+        result_chat = data[data["Category"] == "Home Care"]
+
+    # 🎁 SMART GIFT SYSTEM
+    elif intent == "gift":
+
+        if "shown_products" not in st.session_state:
+            st.session_state.shown_products = set()
+
+        gift_pool = data[
+            (data["EcoScore"] >= 7) &
+            (data["Price"] <= 1500)
+        ]
+
+        gift_pool = gift_pool[
+            ~gift_pool["Name_clean"].str.contains("bag|brush")
+        ]
+
+        gift_pool = gift_pool[
+            ~gift_pool["Name"].isin(st.session_state.shown_products)
+        ]
+
+        result_list = []
+
+        for cat in gift_pool["Category"].unique():
+            cat_items = gift_pool[gift_pool["Category"] == cat]
+
+            if not cat_items.empty:
+                item = cat_items.sample(1)
+                result_list.append(item)
+
+                st.session_state.shown_products.add(item.iloc[0]["Name"])
+
+        if result_list:
+            result_chat = pd.concat(result_list)
+        else:
+            st.warning("⚠️ Resetting suggestions...")
+            st.session_state.shown_products = set()
+            result_chat = gift_pool.sample(min(3, len(gift_pool)))
+
+    # 🏠 DECOR INTENT (NEW 🔥)
+    elif intent == "decor":
+
+        result_chat = data[
+            (data["Category"] == "Home Care") &
+            (data["EcoScore"] >= 6)
+        ]
+
+        # remove useless items
+        result_chat = result_chat[
+            ~result_chat["Name_clean"].str.contains("detergent|cleaner|soap|bag")
+        ]
+
+        if result_chat.empty:
+            st.info("✨ Here are some eco-friendly decor ideas:")
+
+            decor_ideas = [
+                "🌿 Indoor Plants",
+                "🕯️ Scented Candles",
+                "🪵 Wooden Decor Items",
+                "🖼️ Wall Art / Paintings",
+                "🪑 Minimalist Furniture",
+                "💡 Warm Lighting Lamps"
+            ]
+
+            for idea in decor_ideas:
+                st.markdown(f"- {idea}")
 
     else:
-        # 🎯 EXACT MATCH LOGIC
-        if any(x in query for x in ["tshirt", "t shirt", "shirt", "tee"]):
-            matched = data[
-                (data["Category"] == "Clothes") &
-                (data["Name_clean"].str.contains("shirt"))
-            ]
+        result_chat = data[
+            data["Name_clean"].str.contains(query, na=False)
+        ]
 
-        elif any(x in query for x in ["soap", "shampoo", "toothpaste"]):
-            matched = data[data["Category"] == "Personal Care"]
+    # apply price filter
+    if 'result_chat' in locals() and result_chat is not None:
+        if max_price:
+            result_chat = result_chat[result_chat["Price"] <= max_price]
 
-        elif any(x in query for x in ["cleaner", "detergent"]):
-            matched = data[data["Category"] == "Home Care"]
+        if not result_chat.empty:
+            result_chat = result_chat.sort_values(by="EcoScore", ascending=False)
 
-        elif "gift" in query:
-            matched = data[
-                (data["EcoScore"] >= 7) &
-                (data["Price"] <= 1000)
-            ]
+            st.success("✅ Recommended for you:")
 
-        else:
-            matched = data[
-                data["Name_clean"].str.contains(query, na=False)
-            ]
-
-        # ❗ No result
-        if matched.empty:
-            st.error("❌ No matching product found in dataset")
-        else:
-            matched = matched.sort_values(by="EcoScore", ascending=False)
-
-            st.success("✅ Results:")
-
-            for _, row in matched.head(3).iterrows():
+            for _, row in result_chat.head(4).iterrows():
                 st.markdown(f"""
                 **🛍️ {row['Name']}**  
                 💰 ₹{row['Price']} | 🌱 Eco: {row['EcoScore']}
                 """)
-
-# Footer
-st.markdown("---")
-st.caption("🌍 AI-Based Sustainable Shopping Advisor")
+        else:
+            st.warning("⚠️ No good match found")
