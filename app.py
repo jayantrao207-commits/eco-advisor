@@ -1,10 +1,11 @@
+
 import pandas as pd
 import streamlit as st
 import re
 
 st.set_page_config(page_title="Eco Advisor", layout="wide")
 
-# Load data safely
+# Load CSV safely
 try:
     data = pd.read_csv("products.csv")
 except:
@@ -44,7 +45,7 @@ if organic_filter:
 filtered["Score"] = (filtered["EcoScore"] * 0.7) + ((5000 - filtered["Price"]) * 0.3 / 5000)
 result = filtered.sort_values(by="Score", ascending=False)
 
-# 🔥 GRID UI
+# Grid UI
 st.subheader("🌟 Top Recommendations")
 cols = st.columns(3)
 
@@ -63,7 +64,7 @@ st.subheader("📊 Insights")
 st.bar_chart(data["EcoScore"])
 st.bar_chart(data["Category"].value_counts())
 
-# 🤖 CHATBOT
+# 🤖 CHATBOT (FINAL FIXED)
 st.markdown("---")
 st.subheader("🤖 Smart Eco Chatbot")
 
@@ -71,46 +72,50 @@ user_input = st.text_input("Ask (e.g., tshirt, soap, gift)")
 
 if user_input:
     query = user_input.lower().replace("-", " ")
+    words = query.split()
 
-    # greetings
-    if any(x in query for x in ["hi", "hello", "hey"]):
+    # 🔥 Detect product intent FIRST
+    is_product_query = any(x in query for x in [
+        "tshirt", "t shirt", "shirt", "tee",
+        "soap", "shampoo", "cleaner",
+        "gift", "toothpaste"
+    ])
+
+    # Greeting (only if no product intent)
+    if not is_product_query and any(x in words for x in ["hi", "hello", "hey"]):
         st.success("👋 Hello! Ask me for eco-friendly products")
 
-    elif "thank" in query:
+    elif any(x in words for x in ["thank", "thanks"]):
         st.success("😊 You're welcome!")
 
     else:
-        # 🎯 EXACT TSHIRT LOGIC
+        # 🎯 EXACT MATCH LOGIC
         if any(x in query for x in ["tshirt", "t shirt", "shirt", "tee"]):
             matched = data[
                 (data["Category"] == "Clothes") &
                 (data["Name_clean"].str.contains("shirt"))
             ]
 
-        # 🧼 Personal care
         elif any(x in query for x in ["soap", "shampoo", "toothpaste"]):
             matched = data[data["Category"] == "Personal Care"]
 
-        # 🏠 Home
         elif any(x in query for x in ["cleaner", "detergent"]):
             matched = data[data["Category"] == "Home Care"]
 
-        # 🎁 Gift
         elif "gift" in query:
             matched = data[
                 (data["EcoScore"] >= 7) &
                 (data["Price"] <= 1000)
             ]
 
-        # 🔍 General search
         else:
             matched = data[
                 data["Name_clean"].str.contains(query, na=False)
             ]
 
-        # ❗ If nothing found
+        # ❗ No result
         if matched.empty:
-            st.error("❌ No exact product found in dataset")
+            st.error("❌ No matching product found in dataset")
         else:
             matched = matched.sort_values(by="EcoScore", ascending=False)
 
@@ -125,4 +130,3 @@ if user_input:
 # Footer
 st.markdown("---")
 st.caption("🌍 AI-Based Sustainable Shopping Advisor")
-
