@@ -8,7 +8,7 @@ st.set_page_config(page_title="Eco Advisor", layout="wide")
 # Load data
 data = pd.read_csv("products.csv")
 
-# Clean product names (important fix)
+# Clean names (important)
 data["Name_clean"] = data["Name"].str.lower().str.replace("-", " ").str.replace("  ", " ")
 
 # Title
@@ -38,11 +38,11 @@ if eco_filter:
 if organic_filter:
     filtered = filtered[filtered["Organic"] == "Yes"]
 
-# Score system
+# Score
 filtered["Score"] = (filtered["EcoScore"] * 0.7) + ((5000 - filtered["Price"]) * 0.3 / 5000)
 result = filtered.sort_values(by="Score", ascending=False)
 
-# Display products
+# Show products
 st.subheader("🌟 Top Recommendations")
 for _, row in result.head(10).iterrows():
     st.markdown(f"""
@@ -57,7 +57,7 @@ st.subheader("📊 Insights")
 st.bar_chart(data["EcoScore"])
 st.bar_chart(data["Category"].value_counts())
 
-# 🤖 SMART CHATBOT
+# 🤖 CHATBOT
 st.markdown("---")
 st.subheader("🤖 Smart Eco Chatbot")
 
@@ -65,12 +65,10 @@ user_input = st.text_input("Ask (e.g., tshirt, eco soap under 200, gift ideas)")
 
 if user_input:
     query = user_input.lower()
-
-    # Clean query (important fix)
     query_clean = query.replace("-", " ")
     keywords = query_clean.split()
 
-    # Friendly replies
+    # Basic replies
     if any(x in query for x in ["hi", "hello", "hey"]):
         st.success("👋 Hello! Ask me for eco-friendly products 🌱")
 
@@ -93,17 +91,18 @@ if user_input:
         if "organic" in query:
             filtered_chat = filtered_chat[filtered_chat["Organic"] == "Yes"]
 
-        # Category logic
-        if any(x in query for x in ["tshirt", "t shirt", "shirt", "tee"]):
+        # Category understanding
+        is_clothes = any(x in query for x in ["tshirt", "t shirt", "shirt", "tee", "clothes", "wear"])
+        is_personal = any(x in query for x in ["soap", "shampoo", "toothpaste", "body wash"])
+        is_home = any(x in query for x in ["cleaner", "detergent", "dish"])
+
+        if is_clothes:
             filtered_chat = filtered_chat[filtered_chat["Category"] == "Clothes"]
 
-        elif any(x in query for x in ["shoes", "shoe", "sneakers"]):
-            filtered_chat = filtered_chat[filtered_chat["Category"] == "Clothes"]
-
-        elif any(x in query for x in ["soap", "body wash", "cleanser"]):
+        elif is_personal:
             filtered_chat = filtered_chat[filtered_chat["Category"] == "Personal Care"]
 
-        elif any(x in query for x in ["cleaner", "detergent", "dish"]):
+        elif is_home:
             filtered_chat = filtered_chat[filtered_chat["Category"] == "Home Care"]
 
         # 🎁 Gift logic
@@ -120,16 +119,24 @@ if user_input:
                 **🎁 {row['Name']}**  
                 💰 ₹{row['Price']} | 🌱 Eco: {row['EcoScore']}
                 """)
-
         else:
-            # 🔥 SMART MATCHING FIX
+            # 🔥 SMART MATCHING
             matched = filtered_chat[
                 filtered_chat["Name_clean"].apply(
                     lambda name: any(word in name for word in keywords)
                 )
             ]
 
-            # ✅ Found
+            # 🧠 FAILSAFE (IMPORTANT 🔥)
+            if matched.empty:
+                if is_clothes:
+                    matched = data[data["Category"] == "Clothes"]
+                elif is_personal:
+                    matched = data[data["Category"] == "Personal Care"]
+                elif is_home:
+                    matched = data[data["Category"] == "Home Care"]
+
+            # ✅ SHOW RESULTS
             if not matched.empty:
                 matched = matched.sort_values(by="EcoScore", ascending=False)
 
@@ -140,20 +147,8 @@ if user_input:
                     **🛍️ {row['Name']}**  
                     💰 ₹{row['Price']} | 🌱 Eco: {row['EcoScore']}
                     """)
-
-            # ❌ Not found
             else:
-                st.error("❌ Product not found")
-
-                fallback = filtered_chat.sort_values(by="EcoScore", ascending=False)
-
-                st.info("👉 Showing similar eco-friendly products:")
-
-                for _, row in fallback.head(3).iterrows():
-                    st.markdown(f"""
-                    **🛍️ {row['Name']}**  
-                    💰 ₹{row['Price']} | 🌱 Eco: {row['EcoScore']}
-                    """)
+                st.error("❌ No products found")
 
 # Footer
 st.markdown("---")
